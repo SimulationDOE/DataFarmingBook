@@ -26,13 +26,13 @@ def gummylaunch(
         v_sq = v * v
         theta = math.pi / 2.0 - math.asin(book_qty * book_height / 11.5)
         distance = v_sq * (
-        1.0 + math.sqrt(
-            1.0 + (
-            2.0 * G * book_qty * book_height * (position / 11.0) / (
-                v_sq * math.sin(theta)**2
+            1.0 + math.sqrt(
+                1.0 + (
+                    2.0 * G * book_qty * book_height * (position / 11.0) / (
+                        v_sq * math.sin(theta)**2
+                    )
+                )
             )
-            )
-        )
         ) * math.sin(2.0 * theta) / (2.0 * G)
         book_to_launch = (11.5 - position) * math.sin(theta)
         d2 = position * math.sin(theta)
@@ -51,7 +51,7 @@ def range_checker(value):
 
     # Define your boundaries here
     if f_value < 0.01 or f_value > 0.1:
-        raise argparse.ArgumentTypeError(f"{value} is out of bounds. Must be between 0.0 and 1.0.")
+        raise argparse.ArgumentTypeError(f"{value} is out of bounds. Must be between 0.01 and 0.10.")
     return f_value
 
 if "__main__" == __name__:
