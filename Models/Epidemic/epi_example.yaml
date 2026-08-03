@@ -1,0 +1,31 @@
+---
+:headers: true
+:replicate: 1
+:stack: 1
+:center: false
+:specs:
+- :id: n_reps
+  :min: 10
+  :max: 10
+  :decimals: 0
+- :id: Population
+  :min: 2000
+  :max: 8000
+  :decimals: 0
+- :id: Init_infected
+  :min: 1
+  :max: 10
+  :decimals: 0
+- :id: Trans_ratio
+  :min: 0.5
+  :max: 3.5
+  :decimals: 6
+- :id: Intervention_day
+  :min: 1
+  :max: 91
+  :decimals: 0
+- :id: Trans_ratio_reduction
+  :min: 0
+  :max: 0.75
+  :decimals: 6
+:design: :nolh
