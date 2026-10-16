@@ -1,10 +1,12 @@
 import argparse
-from functools import partial
+import genericqueue
 import math
-from os.path import basename
 import numpy as np
+
+from functools import partial
+from os.path import basename
 from sys import argv
-import GenericQueue
+
 
 TRI_CONST = 9.0 + math.sqrt(45.0)
 
@@ -116,7 +118,7 @@ if "__main__" == __name__:
     if not args.stream:
         print(',avg delay,avg loss,#customers')
     else:
-        print('')
+        print()
 
     for _ in range(args.reps):
         print(inputs, end='')

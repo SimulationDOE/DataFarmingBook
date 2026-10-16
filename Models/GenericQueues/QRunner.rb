@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'optparse'
 require 'random_variates'
 require_relative 'GenericQueue.rb'
 
@@ -60,11 +61,98 @@ else
   rng2 = RV::U_GENERATOR
 end
 
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$PROGRAM_NAME} [-h|--help] [filenames...[]"
+  opts.on(
+      "-s", "--stream",
+      args[:stream] = true,
+      "Toggle streaming of full output",
+  #     action='store_true'
+  )
+  opts.on(
+    "-r", "--rnseeds seed1,seed2",
+    Array,
+    "Provide six comma-separated integer random number seeds"
+  ) do |rnseeds|
+    # options[:rnseeds] = rnseeds.map(&:to_i) # Convert each element to Integer
+    # pp rnseeds.map
+    # pp rnseeds
+    options[:rngs] = rnseeds.map do |seed|
+      Xoroshiro::Random.new(seed: seed.to_i) # Convert each element to integer to seed rng
+    end
+  end
+end.parse!
+
+# Check if we have exactly six integers
+
+if options[:rngs].nil?
+  options[:rngs] = Array.new(6) { Xoroshiro::Random.new }
+else
+  if options[:rngs].size != 6
+    puts "Please provide six comma-separated integers using the -r option,"
+    puts "or leave out the -r option to use system-generated seeds"
+    exit
+  end
+end
+
+# parser = argparse.ArgumentParser(
+#     prog=program_name,
+#     description="Run control for a G/G/k queueing system",
+#     # epilog=f"Example: python {program_name} 2.5 2 7.0 50 0.1 green"
+# )
+# parser.add_argument("nominal_customers", help="Target number of customers to process", type=int)
+# parser.add_argument("rho", help="traffic intensity", type=range_checker)
+# parser.add_argument("arrival_rate", help="Rate of arrival process", type=float)
+# parser.add_argument(
+#     "arrival_dist",
+#     help="Distribution of arrival process",
+#     choices=['exp','sexp','tri','unif']
+# )
+# parser.add_argument("max_servers", help="Maximum number of servers", type=int)
+# parser.add_argument(
+#     "service_dist",
+#     help="Distribution of service process",
+#     choices=['exp','sexp','tri','unif']
+# )
+# parser.add_argument(
+#     "q_discipline",
+#     help="Is this a FIFO or LIFO queue?",
+#     choices=['fifo','lifo']
+# )
+# parser.add_argument(
+#     "reps",
+#     nargs='?',
+#     default=1,
+#     help="Number of replications to run",
+#     type=int
+# )
+# parser.add_argument(
+#     "-w", "--warmup",
+#     default=0,
+#     help="Amount to truncate for system warmup",
+#     type=int
+# )
+# parser.add_argument(
+#     "-s", "--stream",
+#     help="Toggle streaming of full output",
+#     action='store_true'
+# )
+# parser.add_argument(
+#     "-r", "--rnseeds",
+#     nargs=2, default=[],
+#     help="Optional pair of seed values for arrival and service processes",
+#     type=int
+# )
+# args = parser.parse_args()
+
 if ARGV.length < 8
   err_msg
 else
   inputstr = ARGV.clone
+  pp inputstr
   inputstr.delete_at 7
+  pp inputstr
   inputs = inputstr.join ','
   args[:customers] = ARGV.shift.to_i
   traffic = ARGV.shift.to_f

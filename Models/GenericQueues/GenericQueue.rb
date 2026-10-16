@@ -6,11 +6,8 @@ require 'quickstats'
 class Customer
   attr_reader :arrival_time, :service_time, :id
 
-  @@counter = 0
-
-  def initialize(arrival_time:, service_time:)
-    @@counter += 1
-    @id = @@counter
+  def initialize(arrival_time:, service_time:, id:)
+    @id = id
     @arrival_time = arrival_time
     @service_time = service_time
   end
@@ -36,6 +33,7 @@ class GGk
     @LIFO = lifo
     @truncate = truncate
     @stream = stream
+    @customer_count = 0
   end
 
   # Initialize the model state and schedule any necessary events.
@@ -51,7 +49,12 @@ class GGk
   # An arrival event increments the queue length, schedules the next
   # arrival, and schedules a beginService event if a server is available.
   def arrival
-    @queue << Customer.new(arrival_time: model_time, service_time: @service_dist.next)
+    @customer_count += 1
+    @queue << Customer.new(
+      arrival_time: model_time,
+      service_time: @service_dist.next,
+      id: @customer_count
+    )
     schedule(:arrival, @arrival_dist.next)
     schedule(:begin_service, 0.0) if @num_available_servers > 0
   end
@@ -67,7 +70,7 @@ class GGk
     end
     @num_available_servers -= 1
     delay_in_queue = model_time - customer.arrival_time
-    puts "#{customer.id},#{"%.4f" % delay_in_queue}" if @stream
+    puts "#{customer.id},#{"%.4f" % delay_in_queue}" if (@stream && (customer.id > @truncate))
     @summary_stats.new_obs delay_in_queue if customer.id > @truncate
     schedule(:end_service, customer.service_time)
   end
@@ -84,11 +87,13 @@ class GGk
   end
 
   def end_sim
-    avg = @summary_stats.avg
-    n = @summary_stats.n
-    loss = @summary_stats.ssd / n + avg * avg
+    if !@stream
+      avg = @summary_stats.avg
+      n = @summary_stats.n
+      loss = @summary_stats.ssd / n + avg * avg
 
-    puts "#{avg},#{loss},#{n}"
+      puts "#{avg},#{loss},#{n}"
+    end
     halt
   end
 end
