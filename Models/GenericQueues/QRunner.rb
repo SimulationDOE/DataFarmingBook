@@ -5,7 +5,8 @@ require 'optparse'
 require 'random_variates'
 require_relative 'GenericQueue.rb'
 
-TRI_CONST = 9.0 + Math.sqrt(45.0)
+DISTRIBUTIONS = %w[exp sexp tri unif]
+Q_DISCIPLINE = %w[fifo lifo]
 
 class ShiftedExponential
   include RV::RV_Generator
@@ -20,7 +21,10 @@ class ShiftedExponential
   end
 end
 
+TRI_CONST = 9.0 + Math.sqrt(45.0)
+
 def pick_distribution(name:, mu:, rng: RV::U_GENERATOR)
+  fail "Unknown distribution: '#{name}'" unless DISTRIBUTIONS.include?(name)
   case name
   when 'exp'
     RV::Exponential.new(mean: mu, rng: rng)
@@ -35,149 +39,119 @@ def pick_distribution(name:, mu:, rng: RV::U_GENERATOR)
   when 'unif'
     RV::Uniform.new(min: 0, max: 2.0 * mu, rng: rng)
   else
-    raise "Unknown distribution: '#{name}', should be 'exp', 'sexp' 'tri', or 'unif'\n\tfor exponential, shifted exponential, triangle, or uniform"
+    fail "This should never happen!"
   end
 end
 
-args = {}
-args[:stream] = false
+USAGE =
+  "usage: #{$PROGRAM_NAME} [-h] [-w WARMUP] [-s] [-r SEED1,SEED2]\n" +
+  "                  nominal_customers rho arrival_rate arrival_dist\n" +
+  "                  max_servers service_dist q_discipline [reps]\n\n"
 
-def err_msg
-  STDERR.puts
-  warn 'Must supply cmd-line arguments for:'
-  warn "\n\t#customers\n\ttraffic intensity (0...1)\n\tarrival rate"
-  warn "\tarrival dist (exp/sexp/tri/unif)\n\t#servers"
-  warn "\tservice dist (exp/sexp/tri/unif)\n\t'fifo' or 'lifo'\n\t#replications"
-  warn "\nOptionally, two additional integer-valued cmd-line arguments"
-  warn "can be provided for seeding the arrival and service processes.\n"
-  STDERR.puts
-end
+options = {
+  :lifo => false,
+  :stream => false,
+  :truncate => 0,
+}
 
-if ARGV.length == 10
-  rng1 = Xoroshiro::Random.new(seed: ARGV.pop.to_i)
-  rng2 = Xoroshiro::Random.new(seed: ARGV.pop.to_i)
-else
-  rng1 = RV::U_GENERATOR
-  rng2 = RV::U_GENERATOR
-end
-
-options = {}
-OptionParser.new do |opts|
-  opts.banner = "Usage: #{$PROGRAM_NAME} [-h|--help] [filenames...[]"
+opt_parse = OptionParser.new do |opts|
+  # opts.banner = "Usage: #{$PROGRAM_NAME} [-h|--help] [filenames...[]"
+  opts.banner =
+  USAGE +
+  "Run control for a G/G/k queueing system\n\n" +
+  "positional arguments:
+    nominal_customers     Target number of customers to process
+    rho                   Traffic intensity (0 < rho < 1)
+    arrival_rate          Arrival process rate
+    interarrival_dist     Interarrival time distribution {exp|sexp|tri|unif}
+    max_servers           Maximum number of servers
+    service_dist          Service time distribution {exp|sexp|tri|unif}
+    q_discipline          Queueing discipline {fifo,lifo}
+    [reps]                Replications (optional, default=1) \n\n" +
+  "options:"
   opts.on(
-      "-s", "--stream",
-      args[:stream] = true,
-      "Toggle streaming of full output",
-  #     action='store_true'
+    "-r", "--rnseeds SEED1,SEED2",
+    Array,
+    "Seed values for arrival/service processes"
+  ) do |rnseeds|
+      opts.abort "Two seed values are required" if rnseeds.size != 2
+      # options[:rnseeds] = rnseeds.map(&:to_i) # Convert each element to Integer
+      # opts.abort("Seeds must be strictly positive integers") if options[:rnseeds].any? {|x| x < 1}
+      # options[:rnseeds]
+      rnseeds.map!(&:to_i) # Convert each element to Integer
+      opts.abort("Seeds must be strictly positive integers") if rnseeds.any? {|x| x < 1}
+      puts "Random number seeds provided: #{rnseeds.inspect}"
+      rnseeds
+  end
+  opts.on(
+    "-s", "--stream",
+    TrueClass,
+    "Toggle streaming of full output"
   )
   opts.on(
-    "-r", "--rnseeds seed1,seed2",
-    Array,
-    "Provide six comma-separated integer random number seeds"
-  ) do |rnseeds|
-    # options[:rnseeds] = rnseeds.map(&:to_i) # Convert each element to Integer
-    # pp rnseeds.map
-    # pp rnseeds
-    options[:rngs] = rnseeds.map do |seed|
-      Xoroshiro::Random.new(seed: seed.to_i) # Convert each element to integer to seed rng
-    end
-  end
-end.parse!
-
-# Check if we have exactly six integers
-
-if options[:rngs].nil?
-  options[:rngs] = Array.new(6) { Xoroshiro::Random.new }
-else
-  if options[:rngs].size != 6
-    puts "Please provide six comma-separated integers using the -r option,"
-    puts "or leave out the -r option to use system-generated seeds"
-    exit
+    "-t AMT", "--truncate",
+    Integer,
+    "Amount to truncate for system warmup"
+  ) do |value|
+      v = value.to_i
+      opts.abort "Truncation amount must be positive" if v < 0
+      v
   end
 end
 
-# parser = argparse.ArgumentParser(
-#     prog=program_name,
-#     description="Run control for a G/G/k queueing system",
-#     # epilog=f"Example: python {program_name} 2.5 2 7.0 50 0.1 green"
-# )
-# parser.add_argument("nominal_customers", help="Target number of customers to process", type=int)
-# parser.add_argument("rho", help="traffic intensity", type=range_checker)
-# parser.add_argument("arrival_rate", help="Rate of arrival process", type=float)
-# parser.add_argument(
-#     "arrival_dist",
-#     help="Distribution of arrival process",
-#     choices=['exp','sexp','tri','unif']
-# )
-# parser.add_argument("max_servers", help="Maximum number of servers", type=int)
-# parser.add_argument(
-#     "service_dist",
-#     help="Distribution of service process",
-#     choices=['exp','sexp','tri','unif']
-# )
-# parser.add_argument(
-#     "q_discipline",
-#     help="Is this a FIFO or LIFO queue?",
-#     choices=['fifo','lifo']
-# )
-# parser.add_argument(
-#     "reps",
-#     nargs='?',
-#     default=1,
-#     help="Number of replications to run",
-#     type=int
-# )
-# parser.add_argument(
-#     "-w", "--warmup",
-#     default=0,
-#     help="Amount to truncate for system warmup",
-#     type=int
-# )
-# parser.add_argument(
-#     "-s", "--stream",
-#     help="Toggle streaming of full output",
-#     action='store_true'
-# )
-# parser.add_argument(
-#     "-r", "--rnseeds",
-#     nargs=2, default=[],
-#     help="Optional pair of seed values for arrival and service processes",
-#     type=int
-# )
-# args = parser.parse_args()
+opt_parse.parse!(into: options)
 
-if ARGV.length < 8
-  err_msg
+unless [7,8].include? ARGV.length
+  opt_parse.parse %[--help]
 else
-  inputstr = ARGV.clone
-  pp inputstr
-  inputstr.delete_at 7
-  pp inputstr
-  inputs = inputstr.join ','
-  args[:customers] = ARGV.shift.to_i
-  traffic = ARGV.shift.to_f
-  arr_mean = 1.0 / ARGV.shift.to_f
+  reps = (ARGV.length == 7) ? 1 : ARGV.pop.to_i
+  fail 'Number of reps must be strictly positive' if reps < 1
+  inputs = ARGV.join ','
+  options[:customers] = ARGV.shift.to_i
+  fail 'Target number of customers must be strictly positive' if options[:customers] < 1
+  rho = ARGV.shift.to_f
+  fail 'Traffic intensity must be in range 0 < rho < 1' unless (rho > 0.0 && rho < 1.0)
+  arr_rate = ARGV.shift.to_f
+  fail 'Arrival rate must be strictly positive' unless arr_rate > 0.0
+  arr_mean = 1.0 / arr_rate
   arr = ARGV.shift.downcase
-  args[:max_servers] = ARGV.shift.to_i
-  svc_mean = traffic * arr_mean * args[:max_servers]
+  options[:max_servers] = ARGV.shift.to_i
+  svc_mean = rho * arr_mean * options[:max_servers]
   svc = ARGV.shift.downcase
-  args[:lifo] = case ARGV.shift.downcase
-                when 'lifo'
-                  true
-                when 'fifo'
-                  false
-                else
-                  raise 'Invalid option for lifo/fifo'
+  q_disc = ARGV.shift.downcase
+  fail 'Invalid option for queue discipline (lifo/fifo)' unless Q_DISCIPLINE.include? q_disc
+  options[:lifo] = true if 'lifo' === q_disc
+  if options.has_key? :rnseeds
+    seed1, seed2 = options.delete(:rnseeds)
+    rng1 = Xoroshiro::Random.new(seed: seed1)
+    rng2 = Xoroshiro::Random.new(seed: seed2)
+  else
+    rng1 = RV::U_GENERATOR
+    rng2 = RV::U_GENERATOR
   end
-  reps = ARGV.shift.to_i
+  options[:arrival_dist] = pick_distribution(name: arr, mu: arr_mean, rng: rng1)
+  options[:service_dist] = pick_distribution(name: svc, mu: svc_mean, rng: rng2)
 
-  args[:arrival_dist] = pick_distribution(name: arr, mu: arr_mean, rng: rng1)
-  args[:service_dist] = pick_distribution(name: svc, mu: svc_mean, rng: rng2)
-  # Instantiate a GGk object and run it.
-  print 'nominal #customers,rho,lambda,arrival dist,#servers,service dist,'
-  puts 'queue discipline,avg delay,loss,#customers'
-  reps.times do
-    print inputs + ','
-    GGk.new(**args).run
+  print 'nominal#customers,rho,lambda,arrival_dist,' +
+    '#servers,service_dist,queue_discipline'
+  if options[:stream]
+    puts inputs
+  else
+    puts ',avg_delay,avg_loss,#customers'
+  end
+
+  reps.times do |rep|
+    if options[:stream]
+      if reps > 1
+        puts "\nrep_#{rep+1}"
+      else
+        puts
+      end
+      puts 'customer_id,delay'
+    else
+      print(inputs + ',')
+    end
+    # Instantiate a GGk object and run it.
+    GGk.new(**options).run
   end
 end

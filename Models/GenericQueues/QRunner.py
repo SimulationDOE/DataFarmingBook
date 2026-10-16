@@ -1,12 +1,19 @@
-import argparse
-import genericqueue
-import math
-import numpy as np
+#!/usr/bin/env python3
 
+"""Program to parse arguments to control runs of queueing models"""
+
+# Group 1: Standard library imports (built into Python)
+import argparse
+import math
 from functools import partial
 from os.path import basename
 from sys import argv
 
+# Group 2: Third-party imports (installed via pip/poetry)
+import numpy as np
+
+# Group 3: Local application/library-specific imports
+import GenericQueue
 
 TRI_CONST = 9.0 + math.sqrt(45.0)
 
@@ -55,16 +62,16 @@ if "__main__" == __name__:
     )
     parser.add_argument("nominal_customers", help="Target number of customers to process", type=int)
     parser.add_argument("rho", help="traffic intensity", type=range_checker)
-    parser.add_argument("arrival_rate", help="Rate of arrival process", type=float)
+    parser.add_argument("arrival_rate", help="Arrival process rate", type=float)
     parser.add_argument(
         "arrival_dist",
-        help="Distribution of arrival process",
+        help="Interarrival time distribution",
         choices=['exp','sexp','tri','unif']
     )
     parser.add_argument("max_servers", help="Maximum number of servers", type=int)
     parser.add_argument(
         "service_dist",
-        help="Distribution of service process",
+        help="Service time distribution",
         choices=['exp','sexp','tri','unif']
     )
     parser.add_argument(
@@ -80,7 +87,7 @@ if "__main__" == __name__:
         type=int
     )
     parser.add_argument(
-        "-w", "--warmup",
+        "-t", "--truncate",
         default=0,
         help="Amount to truncate for system warmup",
         type=int
@@ -100,6 +107,7 @@ if "__main__" == __name__:
 
     s1 = s2 = None
     if len(args.rnseeds) == 2:
+        print(f"Random number seeds provided: {args.rnseeds}")
         s1 = args.rnseeds[0]
         s2 = args.rnseeds[1]
 
@@ -111,17 +119,27 @@ if "__main__" == __name__:
 
     arv = pick_distribution(rng1, name=args.arrival_dist, mu=arr_mean)
     svc = pick_distribution(rng2, name=args.service_dist, mu=svc_mean)
+
     print(
-        'nominal#customers,rho,lambda,arrival_dist,#servers,service_dist,queue_discipline',
+        'nominal#customers,rho,lambda,arrival_dist,' +
+        '#servers,service_dist,queue_discipline',
         end=''
     )
-    if not args.stream:
-        print(',avg delay,avg loss,#customers')
-    else:
-        print()
 
-    for _ in range(args.reps):
-        print(inputs, end='')
+    if args.stream:
+        print(inputs)
+    else:
+        print(',avg_delay,avg_loss,#customers')
+
+    for rep in range(args.reps):
+        if args.stream:
+            if args.reps > 1:
+                print(f"\nrep_{rep + 1}")
+            else:
+                print()
+            print('customer_id,delay', end='')
+        else:
+            print(inputs, end='')
         # Instantiate a GGk object and run it.
         GenericQueue.GGk(
             arrival_dist = arv,
@@ -129,6 +147,6 @@ if "__main__" == __name__:
             max_servers=args.max_servers,
             customers=args.nominal_customers,
             lifo=(args.q_discipline=="lifo"),
-            truncate=args.warmup,
+            truncate=args.truncate,
             stream=args.stream
         ).run()

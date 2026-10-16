@@ -1,20 +1,19 @@
 """Stochastic DES model of generic queues."""
 
-# from functools import partial
-# from sys import argv, stderr
-
-# import numpy as np
-from event_graph_sim import SimpleKit
-from adaptive_stats import QuickStats
+# Group 1: Standard library imports (built into Python)
 from collections import deque
+
+# Group 2: Third-party imports (installed via pip/poetry)
+from adaptive_stats import QuickStats
+from event_graph_sim import SimpleKit
+
+# Group 3: Local application/library-specific imports
 
 class Customer:
     """Define customers with fixed transaction times and unique identifiers"""
-    counter = 0
 
-    def __init__(self, arrival_time=0.0, service_time=0.0):
-        Customer.counter += 1
-        self.__id = Customer.counter
+    def __init__(self, customer_id, arrival_time=0.0, service_time=0.0):
+        self.__id = customer_id
         self.__arrival_time = arrival_time
         self.__service_time = service_time
 
@@ -65,6 +64,7 @@ class GGk(SimpleKit):
         self.__LIFO = lifo
         self.__truncate = truncate
         self.__stream = stream
+        self.__customer_count = 0
 
     def init(self):
         """
@@ -82,8 +82,13 @@ class GGk(SimpleKit):
         An arrival event increments the queue length, schedules the next
         arrival, and schedules a beginService event if a server is available.
         """
+        self.__customer_count += 1
         self.__deque.append(
-            Customer(arrival_time=self.model_time, service_time=self.__service_dist())
+            Customer(
+                customer_id = self.__customer_count,
+                arrival_time=self.model_time,
+                service_time=self.__service_dist()
+                )
         )
         self.schedule(self.arrival, self.__arrival_dist())
         if self.__num_available_servers > 0:
@@ -100,9 +105,9 @@ class GGk(SimpleKit):
         delay_in_queue = self.model_time - customer.arrival_time
         if self.__stream:
             if customer.id == 1:
-                print("")
+                print()
             if customer.id > self.__truncate:
-                print(f"{customer.id},{delay_in_queue:.4f}")
+                print(f"{customer.id},{delay_in_queue:.6f}")
         if customer.id > self.__truncate:
             self.__summary_stats.new_obs(delay_in_queue)
         self.schedule(self.end_service, customer.service_time)
@@ -124,5 +129,5 @@ class GGk(SimpleKit):
             avg = self.__summary_stats.avg
             n = self.__summary_stats.n
             loss = self.__summary_stats.ssd / n + avg * avg
-            print(f",{avg},{loss},{n}")
+            print(f",{avg:.6f},{loss:.6f},{n}")
         self.halt()
