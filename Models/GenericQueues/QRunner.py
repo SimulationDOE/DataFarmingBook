@@ -63,12 +63,12 @@ if "__main__" == __name__:
     parser.add_argument("nominal_customers", help="Target number of customers to process", type=int)
     parser.add_argument("rho", help="traffic intensity", type=range_checker)
     parser.add_argument("arrival_rate", help="Arrival process rate", type=float)
+    parser.add_argument("max_servers", help="Maximum number of servers", type=int)
     parser.add_argument(
         "arrival_dist",
         help="Interarrival time distribution",
         choices=['exp','sexp','tri','unif']
     )
-    parser.add_argument("max_servers", help="Maximum number of servers", type=int)
     parser.add_argument(
         "service_dist",
         help="Service time distribution",
@@ -80,8 +80,8 @@ if "__main__" == __name__:
         choices=['fifo','lifo']
     )
     parser.add_argument(
-        "reps",
-        nargs='?',
+        "--replications",
+        # nargs='?',
         default=1,
         help="Number of replications to run",
         type=int
@@ -131,9 +131,9 @@ if "__main__" == __name__:
     else:
         print(',avg_delay,avg_loss,#customers')
 
-    for rep in range(args.reps):
+    for rep in range(args.replications):
         if args.stream:
-            if args.reps > 1:
+            if args.replications > 1:
                 print(f"\nrep_{rep + 1}")
             else:
                 print()

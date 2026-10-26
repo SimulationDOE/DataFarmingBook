@@ -24,7 +24,7 @@ class GGk
   # param: max_servers - The total number of servers in the system.
   # param: customers - number of customers to process
   def initialize(
-    arrival_dist:, service_dist:, max_servers:, customers:, lifo: false, truncate: 0, stream: false
+    arrival_dist:, service_dist:, max_servers:, customers:, rnseeds: false, lifo: false, truncate: 0, stream: false
   )
     @max_servers = max_servers
     @max_customers = customers
@@ -33,6 +33,8 @@ class GGk
     @LIFO = lifo
     @truncate = truncate
     @stream = stream
+    @rnseeds = rnseeds
+    # puts @rnseeds[1]
     @customer_count = 0
   end
 
@@ -91,8 +93,11 @@ class GGk
       avg = @summary_stats.avg
       n = @summary_stats.n
       loss = @summary_stats.ssd / n + avg * avg
-
-      puts "#{'%.6f' % avg},#{'%.6f' % loss},#{n}"
+      if !@rnseeds
+        puts "#{'%.6f' % avg},#{'%.6f' % loss},#{n}"
+      else
+        puts "#{@rnseeds[0]},#{@rnseeds[1]},#{'%.6f' % avg},#{'%.6f' % loss},#{n}"
+      end
     end
     halt
   end

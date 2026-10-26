@@ -43,55 +43,64 @@ def pick_distribution(name:, mu:, rng: RV::U_GENERATOR)
   end
 end
 
-USAGE =
-  "usage: #{$PROGRAM_NAME} [-h] [-w WARMUP] [-s] [-r SEED1,SEED2]\n" +
-  "                  nominal_customers rho arrival_rate arrival_dist\n" +
-  "                  max_servers service_dist q_discipline [reps]\n\n"
-
 options = {
   :lifo => false,
+  :replications => 1,
   :stream => false,
   :truncate => 0,
 }
 
 opt_parse = OptionParser.new do |opts|
-  # opts.banner = "Usage: #{$PROGRAM_NAME} [-h|--help] [filenames...[]"
-  opts.banner =
-  USAGE +
-  "Run control for a G/G/k queueing system\n\n" +
-  "positional arguments:
-    nominal_customers     Target number of customers to process
-    rho                   Traffic intensity (0 < rho < 1)
-    arrival_rate          Arrival process rate
-    interarrival_dist     Interarrival time distribution {exp|sexp|tri|unif}
-    max_servers           Maximum number of servers
-    service_dist          Service time distribution {exp|sexp|tri|unif}
-    q_discipline          Queueing discipline {fifo,lifo}
-    [reps]                Replications (optional, default=1) \n\n" +
-  "options:"
+  opts.banner = "Usage: #{$PROGRAM_NAME} [options] [positional args]\n\nOptions:"
+  opts.on(
+    "-h", "--help",
+    "Show this help message"
+  ) do
+    puts "\nRun control for a G/G/k queueing system"
+    puts
+    puts opts
+    puts "\nDash-based options are parsed first, remaining values are"
+    puts "interpreted as positional arguments in the following order."
+    puts "\nPositional arguments:"
+    puts "    nominal_customers     Target number of customers to process"
+    puts "    rho                   Traffic intensity (0 < rho < 1)"
+    puts "    arrival_rate          Arrival process rate"
+    puts "    max_servers           Maximum number of servers"
+    puts "    interarrival_dist     Interarrival time distribution {exp|sexp|tri|unif}"
+    puts "    service_dist          Service time distribution {exp|sexp|tri|unif}"
+    puts "    q_discipline          Queueing discipline {fifo,lifo}"
+    puts
+    exit
+  end
+  opts.on(
+    "--replications REPS",
+    Integer,
+    "Replications (default=1)"
+  ) do |value|
+      v = value.to_i
+      opts.abort "REPS must be strictly positive" unless v > 0
+      v
+  end
   opts.on(
     "-r", "--rnseeds SEED1,SEED2",
     Array,
     "Seed values for arrival/service processes"
   ) do |rnseeds|
-      opts.abort "Two seed values are required" if rnseeds.size != 2
-      # options[:rnseeds] = rnseeds.map(&:to_i) # Convert each element to Integer
-      # opts.abort("Seeds must be strictly positive integers") if options[:rnseeds].any? {|x| x < 1}
-      # options[:rnseeds]
+      opts.abort "Two comma-separated seed values are required" if rnseeds.size != 2
       rnseeds.map!(&:to_i) # Convert each element to Integer
       opts.abort("Seeds must be strictly positive integers") if rnseeds.any? {|x| x < 1}
-      puts "Random number seeds provided: #{rnseeds.inspect}"
+      # puts "Random number seeds provided: #{rnseeds.inspect}"
       rnseeds
   end
   opts.on(
     "-s", "--stream",
     TrueClass,
-    "Toggle streaming of full output"
+    "Stream output (default=off)"
   )
   opts.on(
     "-t AMT", "--truncate",
     Integer,
-    "Amount to truncate for system warmup"
+    "Truncation amount for warmup (default=0)"
   ) do |value|
       v = value.to_i
       opts.abort "Truncation amount must be positive" if v < 0
@@ -101,11 +110,9 @@ end
 
 opt_parse.parse!(into: options)
 
-unless [7,8].include? ARGV.length
+unless 7 == ARGV.length
   opt_parse.parse %[--help]
 else
-  reps = (ARGV.length == 7) ? 1 : ARGV.pop.to_i
-  fail 'Number of reps must be strictly positive' if reps < 1
   inputs = ARGV.join ','
   options[:customers] = ARGV.shift.to_i
   fail 'Target number of customers must be strictly positive' if options[:customers] < 1
@@ -114,15 +121,16 @@ else
   arr_rate = ARGV.shift.to_f
   fail 'Arrival rate must be strictly positive' unless arr_rate > 0.0
   arr_mean = 1.0 / arr_rate
-  arr = ARGV.shift.downcase
   options[:max_servers] = ARGV.shift.to_i
   svc_mean = rho * arr_mean * options[:max_servers]
+  arr = ARGV.shift.downcase
   svc = ARGV.shift.downcase
   q_disc = ARGV.shift.downcase
   fail 'Invalid option for queue discipline (lifo/fifo)' unless Q_DISCIPLINE.include? q_disc
   options[:lifo] = true if 'lifo' === q_disc
   if options.has_key? :rnseeds
-    seed1, seed2 = options.delete(:rnseeds)
+    # seed1, seed2 = options.delete :rnseeds
+    seed1, seed2 = options[:rnseeds]
     rng1 = Xoroshiro::Random.new(seed: seed1)
     rng2 = Xoroshiro::Random.new(seed: seed2)
   else
@@ -132,14 +140,20 @@ else
   options[:arrival_dist] = pick_distribution(name: arr, mu: arr_mean, rng: rng1)
   options[:service_dist] = pick_distribution(name: svc, mu: svc_mean, rng: rng2)
 
-  print 'nominal#customers,rho,lambda,arrival_dist,' +
-    '#servers,service_dist,queue_discipline'
+  print 'nominal#customers,rho,lambda,#servers,' +
+    'arrival_dist,service_dist,queue_discipline'
+  print ",seed1,seed2" if options[:rnseeds]
   if options[:stream]
-    puts inputs
+    if options[:rnseeds]
+      puts "\n#{inputs},#{seed1},#{seed2}"
+    else
+      puts "\n#{inputs}"
+    end
   else
     puts ',avg_delay,avg_loss,#customers'
   end
 
+  reps = options.delete :replications
   reps.times do |rep|
     if options[:stream]
       if reps > 1
